@@ -686,7 +686,7 @@ class TushareFetcher(BaseFetcher):
         result["source_chain"].append("tushare:capital_flow")
         return result
 
-            def get_stock_name(self, stock_code: str) -> Optional[str]:
+    def get_stock_name(self, stock_code: str) -> Optional[str]:
         """
         获取股票名称
         
