@@ -434,6 +434,17 @@ class StockAnalysisPipeline:
             logger.error(f"{stock_name}({code}) {error_msg}")
             return False, error_msg
     
+    def _record_run_failure(self, code: str, name: str, reason: object) -> None:
+        """Record one failed stock for the structured run status (V1.0).
+
+        Defensive by design: failure bookkeeping must never break the
+        error path itself, even on partially constructed pipeline objects.
+        """
+        failures = getattr(self, "last_run_failures", None)
+        if failures is None:
+            failures = self.last_run_failures = []
+        failures.append({"code": str(code), "name": name, "reason": str(reason)[:300]})
+
     def analyze_stock(
         self,
         code: str,
@@ -1000,9 +1011,7 @@ class StockAnalysisPipeline:
         except Exception as e:
             logger.error(f"{stock_name}({code}) 分析失败: {e}")
             logger.exception(f"{stock_name}({code}) 详细错误信息:")
-            self.last_run_failures.append(
-                {"code": str(code), "name": stock_name, "reason": str(e)[:300]}
-            )
+            self._record_run_failure(code, stock_name, e)
             return None
     
     def _enhance_context(
@@ -1935,9 +1944,7 @@ class StockAnalysisPipeline:
         except Exception as e:
             logger.error(f"[{code}] Agent 分析失败: {e}")
             logger.exception(f"[{code}] Agent 详细错误信息:")
-            self.last_run_failures.append(
-                {"code": str(code), "name": "", "reason": str(e)[:300]}
-            )
+            self._record_run_failure(code, "", e)
             return None
 
     def _load_agent_analysis_context(
