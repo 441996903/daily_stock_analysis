@@ -1212,7 +1212,11 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         if self._get_review_language() == "en":
             lines = []
             if isinstance(light, dict):
-                if light.get("data_quality") == "ok":
+                breadth_missing = (
+                    self.profile.has_market_stats
+                    and not (light.get("dimensions") or {}).get("breadth", {}).get("available", True)
+                )
+                if not breadth_missing:
                     lines.extend(
                         [
                             f"- **Market Signal**: {light['score']}/100 "
@@ -1247,7 +1251,12 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             if overview.limit_up_count is not None and overview.limit_down_count is not None
             else None
         )
-        if isinstance(light, dict) and score is not None and light.get("data_quality") == "ok":
+        breadth_missing = bool(
+            isinstance(light, dict)
+            and self.profile.has_market_stats
+            and not (light.get("dimensions") or {}).get("breadth", {}).get("available", True)
+        )
+        if isinstance(light, dict) and score is not None and not breadth_missing:
             lines.extend(
                 [
                     f"- **盘面信号**：{score}/100（{label}，{light['label']}）",
@@ -1255,7 +1264,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
                     f"- **操作建议**：{light['guidance']}",
                 ]
             )
-        elif isinstance(light, dict):
+        elif isinstance(light, dict) and breadth_missing:
             lines.append("- **盘面信号**：数据不足，暂不评分（市场宽度或涨跌停数据缺失）")
             if light.get("reasons"):
                 lines.append(f"- **信号依据**：{'；'.join(light['reasons'])}")
