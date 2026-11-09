@@ -1205,6 +1205,159 @@ class BochaSearchProvider(BaseSearchProvider):
             return '未知来源'
 
 
+class DeepSeekSearchProvider(BaseSearchProvider):
+    """
+    DeepSeek 官方搜索（Search API）
+
+    特点：
+    - DeepSeek 自研搜索引擎，与 DeepSeek LLM 共用同一 API Key（DEEPSEEK_API_KEY）
+    - 返回结构化结果与长摘要（summary），适合直接喂给模型阅读
+    - 按成功请求次数计费（5 元 / 1000 次），失败或无结果不计费
+
+    文档：https://api-docs.deepseek.com/zh-cn/guides/search
+    """
+
+    API_URL = "https://api.deepseek.com/v1/tools/search"
+
+    def __init__(self, api_keys: List[str]):
+        super().__init__(api_keys, "DeepSeek")
+
+    def _do_search(self, query: str, api_key: str, max_results: int, days: int = 7) -> SearchResponse:
+        """执行 DeepSeek 搜索"""
+        try:
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+            }
+
+            # DeepSeek Search 无独立时效参数，用 after: 算子限定发布时间下限
+            effective_query = query
+            if 'after:' not in query and days and days > 0:
+                after_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+                effective_query = f"{query} after:{after_date}"
+            # query 上限 128 个字符，超限时退回原始查询词截断
+            if len(effective_query) > 128:
+                effective_query = query[:128]
+
+            payload = {
+                "query": effective_query,
+                "count": min(max_results, 50),
+                "need_content": False,
+            }
+
+            response = _post_with_retry(self.API_URL, headers=headers, json=payload, timeout=15)
+
+            if response.status_code != 200:
+                try:
+                    if response.headers.get('content-type', '').startswith('application/json'):
+                        error_data = response.json()
+                        error_obj = error_data.get('error') or {}
+                        error_message = error_obj.get('message') or error_data.get('message') or response.text
+                    else:
+                        error_message = response.text
+                except Exception:
+                    error_message = response.text
+
+                if response.status_code == 401:
+                    error_msg = f"API KEY无效: {error_message}"
+                elif response.status_code == 402:
+                    error_msg = f"余额不足: {error_message}"
+                elif response.status_code == 400:
+                    error_msg = f"请求参数错误: {error_message}"
+                elif response.status_code == 429:
+                    error_msg = f"请求频率达到限制: {error_message}"
+                else:
+                    error_msg = f"HTTP {response.status_code}: {error_message}"
+
+                logger.warning(f"[DeepSeek] 搜索失败: {error_msg}")
+                return SearchResponse(
+                    query=query,
+                    results=[],
+                    provider=self.name,
+                    success=False,
+                    error_message=error_msg
+                )
+
+            try:
+                data = response.json()
+            except ValueError as e:
+                error_msg = f"响应JSON解析失败: {str(e)}"
+                logger.error(f"[DeepSeek] {error_msg}")
+                return SearchResponse(
+                    query=query,
+                    results=[],
+                    provider=self.name,
+                    success=False,
+                    error_message=error_msg
+                )
+
+            logger.info(f"[DeepSeek] 搜索完成，query='{query}'")
+
+            results = []
+            for item in data.get('results', [])[:max_results]:
+                snippet = item.get('summary') or item.get('snippet', '')
+                if snippet:
+                    snippet = snippet[:800]
+
+                results.append(SearchResult(
+                    title=item.get('title', ''),
+                    snippet=snippet,
+                    url=item.get('url', ''),
+                    source=item.get('site_name') or self._extract_domain(item.get('url', '')),
+                    published_date=item.get('date'),
+                ))
+
+            logger.info(f"[DeepSeek] 成功解析 {len(results)} 条结果")
+
+            return SearchResponse(
+                query=query,
+                results=results,
+                provider=self.name,
+                success=True,
+            )
+
+        except requests.exceptions.Timeout:
+            error_msg = "请求超时"
+            logger.error(f"[DeepSeek] {error_msg}")
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+        except requests.exceptions.RequestException as e:
+            error_msg = f"网络请求失败: {str(e)}"
+            logger.error(f"[DeepSeek] {error_msg}")
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+        except Exception as e:
+            error_msg = f"未知错误: {str(e)}"
+            logger.error(f"[DeepSeek] {error_msg}")
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+
+    @staticmethod
+    def _extract_domain(url: str) -> str:
+        """从 URL 提取域名作为来源"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.netloc.replace('www.', '')
+            return domain or '未知来源'
+        except Exception:
+            return '未知来源'
+
 class AnspireSearchProvider(BaseSearchProvider):
     """
     Anspire Search 搜索引擎
@@ -2404,6 +2557,7 @@ class SearchService:
     def __init__(
         self,
         bocha_keys: Optional[List[str]] = None,
+        deepseek_keys: Optional[List[str]] = None,
         tavily_keys: Optional[List[str]] = None,
         anspire_keys: Optional[List[str]] = None,
         brave_keys: Optional[List[str]] = None,
@@ -2432,6 +2586,7 @@ class SearchService:
         """
         self._constructor_kwargs: Dict[str, Any] = {
             "bocha_keys": list(bocha_keys or []),
+            "deepseek_keys": list(deepseek_keys or []),
             "tavily_keys": list(tavily_keys or []),
             "anspire_keys": list(anspire_keys or []),
             "brave_keys": list(brave_keys or []),
@@ -2504,6 +2659,10 @@ class SearchService:
         if anspire_keys:
             self._providers.insert(0, AnspireSearchProvider(anspire_keys))
             logger.info(f"已配置 Anspire Search 搜索，共 {len(anspire_keys)} 个 API Key")
+        # 8. DeepSeek Search（官方 Search API，与 LLM 共用 Key，最高优先级）
+        if deepseek_keys:
+            self._providers.insert(0, DeepSeekSearchProvider(deepseek_keys))
+            logger.info(f"已配置 DeepSeek Search 搜索，共 {len(deepseek_keys)} 个 API Key")
             
         if not self._providers:
             logger.warning("未配置任何搜索能力，新闻搜索功能将不可用")
@@ -4917,6 +5076,7 @@ def get_search_service() -> SearchService:
                 
                 _search_service = SearchService(
                     bocha_keys=config.bocha_api_keys,
+                    deepseek_keys=getattr(config, 'deepseek_api_keys', []),
                     tavily_keys=config.tavily_api_keys,
                     anspire_keys=config.anspire_api_keys,
                     brave_keys=config.brave_api_keys,
