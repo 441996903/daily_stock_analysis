@@ -4606,14 +4606,17 @@ class DataFetcherManager:
         payload: Dict[str, Any],
         budget_seconds: float,
     ) -> None:
-        """主链路未取到个股资金流时，尝试实现了 get_capital_flow 的补充数据源（如妙想）。
+        """主链路未取到个股资金流、或关键字段（当日/5日/10日主力净流入）缺失时，
+        尝试实现了 get_capital_flow 的补充数据源（如妙想、Tushare moneyflow）。
 
         每次补充调用都通过 _run_with_timeout 受剩余阶段预算硬约束，
         不突破 FUNDAMENTAL_*_TIMEOUT_SECONDS 的 fail-open 语义；
         就地更新 payload 的 stock_flow / source_chain / errors。
+        补充只填补主链路缺失的关键字段，不覆盖主链路已有值。
         """
+        _KEY_FIELDS = ("main_net_inflow", "inflow_5d", "inflow_10d")
         stock_flow = payload.get("stock_flow") or {}
-        if isinstance(stock_flow, dict) and any(v is not None for v in stock_flow.values()):
+        if isinstance(stock_flow, dict) and all(stock_flow.get(k) is not None for k in _KEY_FIELDS):
             return
         # 仅尝试声明了本市场资金流能力的补充源;与外层预算探测共用同一市场口径
         eligible_fetchers = [] if _is_non_cn_request(stock_code) else [
@@ -4637,17 +4640,25 @@ class DataFetcherManager:
             remaining = max(0.0, remaining - sup_cost_ms / 1000.0)
             if isinstance(supplemental, dict) and supplemental.get("errors"):
                 payload.setdefault("errors", []).extend(supplemental["errors"])
-            if isinstance(supplemental, dict) and supplemental.get("stock_flow"):
-                payload["stock_flow"] = supplemental["stock_flow"]
-                if supplemental.get("source_chain"):
-                    payload.setdefault("source_chain", []).extend(supplemental["source_chain"])
-                logger.info(
-                    "[资金流] %s 使用 %s 补充个股资金流 (%dms)",
-                    stock_code,
-                    fetcher.name,
-                    sup_cost_ms,
-                )
-                break
+            filled = False
+            if isinstance(supplemental, dict) and isinstance(supplemental.get("stock_flow"), dict):
+                merged = dict(stock_flow) if isinstance(stock_flow, dict) else {}
+                for key in _KEY_FIELDS:
+                    if merged.get(key) is None and supplemental["stock_flow"].get(key) is not None:
+                        merged[key] = supplemental["stock_flow"][key]
+                        filled = True
+                if filled:
+                    payload["stock_flow"] = merged
+                    stock_flow = merged
+                    if supplemental.get("source_chain"):
+                        payload.setdefault("source_chain", []).extend(supplemental["source_chain"])
+                    logger.info(
+                        "[资金流] %s 使用 %s 补充个股资金流 (%dms)",
+                        stock_code,
+                        fetcher.name,
+                        sup_cost_ms,
+                    )
+                    break
             if sup_err:
                 if isinstance(payload.get("errors"), list):
                     payload["errors"].append(f"{fetcher.name}: {sup_err}")
