@@ -620,10 +620,10 @@ class TushareFetcher(BaseFetcher):
             }
             stock_code = normalize_stock_code(stock_code)
             if _is_hk_market(stock_code) or _is_etf_code(stock_code):
-                return result
+            return result
 if self._api is None:
             result["errors"].append("tushare: API 未初始化（TUSHARE_TOKEN 未配置）")
-                return result
+            return result
     
         try:
             ts_code = self._convert_stock_code(stock_code)
