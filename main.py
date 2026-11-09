@@ -885,6 +885,63 @@ def _run_auto_backtest(config: Config) -> None:
         logger.warning(f"自动回测失败（已忽略）: {exc}")
 
 
+def _compute_run_status(
+    stock_codes: Optional[List[str]],
+    results: List[Any],
+    *,
+    market_review_requested: bool,
+    market_review_completed: bool,
+    failures: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, Any]:
+    """Compute the structured run outcome (V1.0 reliability).
+
+    ``results`` holds only successful analyses, so any requested target
+    missing from it failed. Status is ``success`` only when every target
+    succeeded and a requested market review completed; ``failed`` when
+    nothing was produced; ``partial_success`` otherwise.
+    """
+    targets = [str(c) for c in (stock_codes or [])]
+    succeeded_codes = {str(getattr(r, "code", "")) for r in (results or [])}
+    reason_map = {
+        str(f.get("code")): str(f.get("reason") or "") for f in (failures or [])
+    }
+    failed = [
+        {"code": code, "reason": reason_map.get(code) or "未记录异常原因（见运行日志）"}
+        for code in targets
+        if code not in succeeded_codes
+    ]
+    if not market_review_requested:
+        review_state = "skipped"
+    else:
+        review_state = "ok" if market_review_completed else "failed"
+    if not failed and review_state != "failed":
+        status = "success"
+    elif results:
+        status = "partial_success"
+    elif failed or review_state == "failed":
+        status = "failed"
+    else:
+        status = "success"
+    return {
+        "status": status,
+        "total": len(targets),
+        "succeeded": len(targets) - len(failed),
+        "failed": failed,
+        "market_review": review_state,
+    }
+
+
+def _write_run_status_file(run_status: Dict[str, Any]) -> None:
+    """Persist run_status.json in the working directory (best effort)."""
+    try:
+        Path("run_status.json").write_text(
+            json.dumps(run_status, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        logger.warning(f"run_status.json 写入失败（已忽略）: {exc}")
+
+
 def _all_stock_targets_succeeded(
     stock_codes: Optional[List[str]],
     results: List[Any],
@@ -1350,6 +1407,44 @@ def run_full_analysis(
             if deferred_failure_result is not None
             else True
         )
+        # V1.0 structured run status: partial failures used to stay
+        # invisible (run still returned True / workflow green). Persist
+        # run_status.json and send a dedicated failure alert; strict mode
+        # (STRICT_RUN_STATUS=true) additionally fails the run.
+        run_status = _compute_run_status(
+            stock_codes,
+            results,
+            market_review_requested=market_review_requested,
+            market_review_completed=(
+                bool(market_report) if market_review_requested else False
+            ),
+            failures=getattr(pipeline, "last_run_failures", None),
+        )
+        run_status["generated_at"] = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+        _write_run_status_file(run_status)
+        if run_status["status"] != "success":
+            logger.warning(f"运行状态 {run_status['status']}: {run_status}")
+            if not getattr(args, "no_notify", False) and not getattr(args, "dry_run", False):
+                failed_lines = "\n".join(
+                    f"- {item['code']}: {item['reason']}" for item in run_status["failed"]
+                ) or "- 无个股失败"
+                review_line = (
+                    "\n- 大盘复盘：失败" if run_status["market_review"] == "failed" else ""
+                )
+                try:
+                    pipeline.notifier.send(
+                        f"⚠️ 本次分析未完全成功（{run_status['status']}）："
+                        f"成功 {run_status['succeeded']}/{run_status['total']}\n"
+                        f"失败明细：\n{failed_lines}{review_line}",
+                        route_type="report",
+                    )
+                except Exception as notify_exc:
+                    logger.warning(f"运行状态告警发送失败（已忽略）: {notify_exc}")
+            if (
+                run_status["status"] == "partial_success"
+                and os.environ.get("STRICT_RUN_STATUS", "").lower() == "true"
+            ):
+                final_result = False
         # Startup daily dedup bookkeeping: only a genuinely successful AND
         # complete run records the marker — every requested stock target
         # must have produced a result (pipeline.run returns just the
