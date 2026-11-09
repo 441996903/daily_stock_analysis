@@ -257,6 +257,8 @@ class StockAnalysisPipeline:
             max_workers: 最大并发线程数（可选，默认从配置读取）
         """
         self.config = config or get_config()
+        # V1.0: 本轮个股失败明细（{code, name, reason}），供 main 层结构化运行状态使用
+        self.last_run_failures: List[Dict[str, str]] = []
         self.max_workers = max_workers or self.config.max_workers
         self.source_message = source_message
         self.query_id = query_id
@@ -998,6 +1000,9 @@ class StockAnalysisPipeline:
         except Exception as e:
             logger.error(f"{stock_name}({code}) 分析失败: {e}")
             logger.exception(f"{stock_name}({code}) 详细错误信息:")
+            self.last_run_failures.append(
+                {"code": str(code), "name": stock_name, "reason": str(e)[:300]}
+            )
             return None
     
     def _enhance_context(
@@ -1930,6 +1935,9 @@ class StockAnalysisPipeline:
         except Exception as e:
             logger.error(f"[{code}] Agent 分析失败: {e}")
             logger.exception(f"[{code}] Agent 详细错误信息:")
+            self.last_run_failures.append(
+                {"code": str(code), "name": "", "reason": str(e)[:300]}
+            )
             return None
 
     def _load_agent_analysis_context(
@@ -3426,7 +3434,8 @@ class StockAnalysisPipeline:
             分析结果列表
         """
         start_time = time.time()
-        
+        self.last_run_failures = []
+
         # 使用配置中的股票列表
         if stock_codes is None:
             self.config.refresh_stock_list()
