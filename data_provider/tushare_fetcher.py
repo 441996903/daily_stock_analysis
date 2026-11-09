@@ -151,6 +151,7 @@ class TushareFetcher(BaseFetcher):
     
     name = "TushareFetcher"
     priority = int(os.getenv("TUSHARE_PRIORITY", "2"))  # 默认优先级，会在 __init__ 中根据配置动态调整
+    
     # 声明该数据源可服务的资金流市场：个股资金流补充源（见 DataFetcherManager._supplement_capital_flow_from_fetchers）
     capital_flow_markets = {"cn"}
 
@@ -597,39 +598,39 @@ class TushareFetcher(BaseFetcher):
         return df
 
     # ------------------------------------------------------------------
-        # 个股资金流（补充数据源，与妙想 MiaoxiangFetcher 同构）
+    # 个股资金流（补充数据源，与妙想 MiaoxiangFetcher 同构）
     # ------------------------------------------------------------------
 
-        def get_capital_flow(self, stock_code: str, top_n: int = 5) -> Dict[str, Any]:
-            """
-            通过 Tushare Pro moneyflow 获取个股主力资金流：
-            最新交易日主力净流入 + 近5日/近10日主力净流入合计。
+    def get_capital_flow(self, stock_code: str, top_n: int = 5) -> Dict[str, Any]:
+        """
+        通过 Tushare Pro moneyflow 获取个股主力资金流：
+        最新交易日主力净流入 + 近5日/近10日主力净流入合计。
 
-            主力口径与东财一致：大单 + 超大单净额；moneyflow 金额单位为万元，
-            统一换算为元后输出。
+        主力口径与东财一致：大单 + 超大单净额；moneyflow 金额单位为万元，
+        统一换算为元后输出。
 
-            Returns:
-                与 AkshareFundamentalAdapter.get_capital_flow 同构的 payload。
-"""
-            result: Dict[str, Any] = {
-                    "status": "not_supported",
-                "stock_flow": {},
-                "sector_rankings": {"top": [], "bottom": []},
-                "source_chain": [],
-                "errors": [],
-            }
-            stock_code = normalize_stock_code(stock_code)
-            if _is_hk_market(stock_code) or _is_etf_code(stock_code):
+        Returns:
+            与 AkshareFundamentalAdapter.get_capital_flow 同构的 payload。
+        """
+        result: Dict[str, Any] = {
+            "status": "not_supported",
+            "stock_flow": {},
+            "sector_rankings": {"top": [], "bottom": []},
+            "source_chain": [],
+            "errors": [],
+        }
+        stock_code = normalize_stock_code(stock_code)
+        if _is_hk_market(stock_code) or _is_etf_code(stock_code):
             return result
-if self._api is None:
-            result["errors"].append("tushare: API 未初始化（TUSHARE_TOKEN 未配置）")
+        if self._api is None:
+            result["errors"].append("tushare: API 未初始化（TUSHARE_TOKEN未配置）")
             return result
-    
+
         try:
             ts_code = self._convert_stock_code(stock_code)
-trade_dates = self._get_trade_dates()
-if not trade_dates:
-    result["errors"].append("tushare: trade calendar unavailable")
+            trade_dates = self._get_trade_dates()
+            if not trade_dates:
+                result["errors"].append("tushare: trade calendar unavailable")
                 return result
             window_dates = trade_dates[:10]
             df = self._call_api_with_rate_limit(
@@ -639,51 +640,51 @@ if not trade_dates:
                 end_date=window_dates[0],
                 fields="ts_code,trade_date,buy_lg_amount,sell_lg_amount,buy_elg_amount,sell_elg_amount",
             )
-except Exception as exc:
-result["errors"].append(f"tushare: {exc}")
-return result
-
-if df is None or df.empty:
-    result["errors"].append("tushare: empty moneyflow series")
-return result
-
-# 按交易日聚合主力净流入（万元 -> 元）；字段不全的日期不计入，
-# 避免残缺数据污染窗口合计
-series: Dict[str, float] = {}
-for _, row in df.iterrows():
-    values = [
-                row.get("buy_lg_amount"),
-        row.get("sell_lg_amount"),
-        row.get("buy_elg_amount"),
-        row.get("sell_elg_amount"),
-    ]
-    if any(v is None or pd.isna(v) for v in values):
-        continue
-            main_net_wan = (float(values[0]) - float(values[1])) + (float(values[2]) - float(values[3]))
-series[str(row.get("trade_date"))] = main_net_wan * 10000.0
-
-# 以交易日历为权威顺序，只保留 moneyflow 实际有数据的交易日
-ordered = [(d, series[d]) for d in window_dates if d in series]
-if not ordered:
-    result["errors"].append("tushare: empty moneyflow series")
-    return result
-
-    # 窗口字段必须拿到完整交易日数据才输出（与妙想口径一致），
-    # 避免把部分历史合计误标为 5日/10日净流入
-    def window_sum(size: int) -> Optional[float]:
-        values = [value for _, value in ordered[:size]]
-        if len(values) < size:
-            return None
-                        return sum(values)
-
-            result["stock_flow"] = {
-                "main_net_inflow": ordered[0][1],
-                "inflow_5d": window_sum(5),
-                "inflow_10d": window_sum(10),
-            }
-            result["status"] = "partial"
-            result["source_chain"].append("tushare:capital_flow")
+        except Exception as exc:
+            result["errors"].append(f"tushare: {exc}")
             return result
+
+        if df is None or df.empty:
+            result["errors"].append("tushare: empty moneyflow series")
+            return result
+
+        # 按交易日聚合主力净流入（万元 -> 元）；字段不全的日期不计入，
+        # 避免残缺数据污染窗口合计
+        series: Dict[str, float] = {}
+        for _, row in df.iterrows():
+            values = [
+                row.get("buy_lg_amount"),
+                row.get("sell_lg_amount"),
+                row.get("buy_elg_amount"),
+                row.get("sell_elg_amount"),
+            ]
+            if any(v is None or pd.isna(v) for v in values):
+                continue
+            main_net_wan = (float(values[0]) - float(values[1])) + (float(values[2]) - float(values[3]))
+            series[str(row.get("trade_date"))] = main_net_wan * 10000.0
+
+        # 以交易日历为权威顺序，只保留 moneyflow 实际有数据的交易日
+        ordered = [(d, series[d]) for d in window_dates if d in series]
+        if not ordered:
+            result["errors"].append("tushare: empty moneyflow series")
+            return result
+
+        # 窗口字段必须拿到完整交易日数据才输出（与妙想口径一致），
+        # 避免把部分历史合计误标为 5日/10日净流入
+        def window_sum(size: int) -> Optional[float]:
+            values = [value for _, value in ordered[:size]]
+            if len(values) < size:
+                return None
+            return sum(values)
+
+        result["stock_flow"] = {
+            "main_net_inflow": ordered[0][1],
+            "inflow_5d": window_sum(5),
+            "inflow_10d": window_sum(10),
+        }
+        result["status"] = "partial"
+        result["source_chain"].append("tushare:capital_flow")
+        return result
 
             def get_stock_name(self, stock_code: str) -> Optional[str]:
         """
