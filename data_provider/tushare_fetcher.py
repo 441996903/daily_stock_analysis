@@ -1022,11 +1022,10 @@ class TushareFetcher(BaseFetcher):
                     return None
 
                 try:
+                    # daily 接口不支持 rt_k 那种通配/逗号 ts_code，按交易日取全市场
                     df = self._call_api_with_rate_limit(
                         "daily",
-                        ts_code='3*.SZ,6*.SH,0*.SZ,92*.BJ',
-                        start_date=last_date,
-                        end_date=last_date,
+                        trade_date=last_date,
                     )
                     # 为防止不同接口返回的列名大小写不一致（例如 rt_k 返回小写，daily 返回大写），统一将列名转为小写
                     df.columns = [col.lower() for col in df.columns]
