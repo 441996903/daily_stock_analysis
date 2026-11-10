@@ -1589,6 +1589,13 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 
         if not index_available:
             data_quality = "unavailable"
+        elif self.profile.has_market_stats and not breadth_available:
+            # Stats-capable markets (A-share): breadth carries the largest
+            # score weight, so without it the weighted score is built from
+            # neutral defaults and must not be treated as a valid score by
+            # any consumer (report, share image, alerts). Markets without
+            # breadth by design keep their existing "partial" semantics.
+            data_quality = "unavailable"
         elif all(dimension["available"] for dimension in dimensions.values()):
             data_quality = "ok"
         else:
