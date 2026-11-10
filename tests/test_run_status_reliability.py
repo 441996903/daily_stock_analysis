@@ -463,3 +463,5 @@ class MarketLightScoreGateTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# Wave-2 acceptance coverage (PR #1 follow-up).
