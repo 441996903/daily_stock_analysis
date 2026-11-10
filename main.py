@@ -1327,6 +1327,15 @@ def run_full_analysis(
             logger.error(
                 "本轮分析未生成任何报告：预期的个股分析或大盘复盘均未产出结果。"
             )
+            _no_report_status = _compute_run_status(
+                stock_codes,
+                results,
+                market_review_requested=bool(should_run_market_review),
+                market_review_completed=bool(market_report),
+                failures=getattr(pipeline, "last_run_failures", None),
+            )
+            _no_report_status["generated_at"] = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+            _write_run_status_file(_no_report_status)
             return _return_with_auto_backtest(False)
 
         # Issue #190: 合并推送（个股+大盘复盘）
@@ -1441,10 +1450,16 @@ def run_full_analysis(
                 except Exception as notify_exc:
                     logger.warning(f"运行状态告警发送失败（已忽略）: {notify_exc}")
             if (
-                run_status["status"] == "partial_success"
+                run_status["status"] != "success"
                 and os.environ.get("STRICT_RUN_STATUS", "").lower() == "true"
             ):
                 final_result = False
+                if _LAST_ANALYSIS_FAILURE_REASON is None:
+                    _LAST_ANALYSIS_FAILURE_REASON = (
+                        "partial_failure"
+                        if run_status["status"] == "partial_success"
+                        else "run_failed"
+                    )
         # Startup daily dedup bookkeeping: only a genuinely successful AND
         # complete run records the marker — every requested stock target
         # must have produced a result (pipeline.run returns just the
@@ -1475,6 +1490,22 @@ def run_full_analysis(
     except Exception as e:
         if _LAST_ANALYSIS_FAILURE_REASON is None:
             _LAST_ANALYSIS_FAILURE_REASON = "runtime_error"
+        try:
+            _write_run_status_file(
+                {
+                    "status": "failed",
+                    "total": len(stock_codes or []),
+                    "succeeded": 0,
+                    "failed": [
+                        {"code": str(code), "reason": str(e)[:300]}
+                        for code in (stock_codes or [])
+                    ],
+                    "market_review": "unknown",
+                    "generated_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+                }
+            )
+        except Exception:
+            pass
         logger.exception(f"分析流程执行失败: {e}")
         if raise_errors:
             raise
@@ -2046,6 +2077,14 @@ def main() -> int:
                 override_region=effective_region,
                 trigger_source="cli",
             )
+            _review_only_status = _compute_run_status(
+                [],
+                [],
+                market_review_requested=True,
+                market_review_completed=bool(market_review_result),
+            )
+            _review_only_status["generated_at"] = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+            _write_run_status_file(_review_only_status)
             return 0 if market_review_result else 1
 
         # 模式2: 定时任务模式
@@ -2211,6 +2250,8 @@ def main() -> int:
                         "no_report",
                         "empty_stock_list",
                         "report_save_failed",
+                        "partial_failure",
+                        "run_failed",
                     }:
                         return 1
         else:
