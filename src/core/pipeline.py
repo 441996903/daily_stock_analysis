@@ -257,6 +257,8 @@ class StockAnalysisPipeline:
             max_workers: 最大并发线程数（可选，默认从配置读取）
         """
         self.config = config or get_config()
+        # V1.0: 本轮个股失败明细（{code, name, reason}），供 main 层结构化运行状态使用
+        self.last_run_failures: List[Dict[str, str]] = []
         self.max_workers = max_workers or self.config.max_workers
         self.source_message = source_message
         self.query_id = query_id
@@ -432,6 +434,17 @@ class StockAnalysisPipeline:
             logger.error(f"{stock_name}({code}) {error_msg}")
             return False, error_msg
     
+    def _record_run_failure(self, code: str, name: str, reason: object) -> None:
+        """Record one failed stock for the structured run status (V1.0).
+
+        Defensive by design: failure bookkeeping must never break the
+        error path itself, even on partially constructed pipeline objects.
+        """
+        failures = getattr(self, "last_run_failures", None)
+        if failures is None:
+            failures = self.last_run_failures = []
+        failures.append({"code": str(code), "name": name, "reason": str(reason)[:300]})
+
     def analyze_stock(
         self,
         code: str,
@@ -998,6 +1011,7 @@ class StockAnalysisPipeline:
         except Exception as e:
             logger.error(f"{stock_name}({code}) 分析失败: {e}")
             logger.exception(f"{stock_name}({code}) 详细错误信息:")
+            self._record_run_failure(code, stock_name, e)
             return None
     
     def _enhance_context(
@@ -1930,6 +1944,7 @@ class StockAnalysisPipeline:
         except Exception as e:
             logger.error(f"[{code}] Agent 分析失败: {e}")
             logger.exception(f"[{code}] Agent 详细错误信息:")
+            self._record_run_failure(code, "", e)
             return None
 
     def _load_agent_analysis_context(
@@ -3391,6 +3406,7 @@ class StockAnalysisPipeline:
         except Exception as e:
             # 捕获所有异常，确保单股失败不影响整体
             logger.exception(f"[{code}] 处理过程发生未知异常: {e}")
+            self._record_run_failure(code, "", e)
             return None
         finally:
             reset_run_diagnostic_context(diag_token)
@@ -3426,7 +3442,8 @@ class StockAnalysisPipeline:
             分析结果列表
         """
         start_time = time.time()
-        
+        self.last_run_failures = []
+
         # 使用配置中的股票列表
         if stock_codes is None:
             self.config.refresh_stock_list()
@@ -3563,6 +3580,11 @@ class StockAnalysisPipeline:
                             f"[{code}] 分析结果标记为失败，不计入汇总: "
                             f"{result.error_message or '未知原因'}"
                         )
+                        self._record_run_failure(
+                            code,
+                            getattr(result, "name", "") or "",
+                            result.error_message or "分析未成功（未提供错误信息）",
+                        )
 
                     # Issue #128: 分析间隔 - 在个股分析和大盘分析之间添加延迟
                     if idx < len(stock_codes) - 1 and analysis_delay > 0:
@@ -3575,6 +3597,7 @@ class StockAnalysisPipeline:
 
                 except Exception as e:
                     logger.error(f"[{code}] 任务执行失败: {e}")
+                    self._record_run_failure(code, "", e)
         
         # 统计
         elapsed_time = time.time() - start_time
