@@ -3406,6 +3406,7 @@ class StockAnalysisPipeline:
         except Exception as e:
             # 捕获所有异常，确保单股失败不影响整体
             logger.exception(f"[{code}] 处理过程发生未知异常: {e}")
+            self._record_run_failure(code, "", e)
             return None
         finally:
             reset_run_diagnostic_context(diag_token)
@@ -3579,6 +3580,11 @@ class StockAnalysisPipeline:
                             f"[{code}] 分析结果标记为失败，不计入汇总: "
                             f"{result.error_message or '未知原因'}"
                         )
+                        self._record_run_failure(
+                            code,
+                            getattr(result, "name", "") or "",
+                            result.error_message or "分析未成功（未提供错误信息）",
+                        )
 
                     # Issue #128: 分析间隔 - 在个股分析和大盘分析之间添加延迟
                     if idx < len(stock_codes) - 1 and analysis_delay > 0:
@@ -3591,6 +3597,7 @@ class StockAnalysisPipeline:
 
                 except Exception as e:
                     logger.error(f"[{code}] 任务执行失败: {e}")
+                    self._record_run_failure(code, "", e)
         
         # 统计
         elapsed_time = time.time() - start_time
