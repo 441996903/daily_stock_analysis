@@ -1,0 +1,17 @@
+{"stage": "cal", "trading_days": 690, "first": "20240102", "last": "20261110"}
+{"stage": "stock_basic", "stocks": 5923}
+{"stage": "daily", "todo": 690, "done": 0}
+{"stage": "daily_progress", "done": 50, "of": 690}
+{"stage": "daily_progress", "done": 100, "of": 690}
+{"stage": "daily_progress", "done": 150, "of": 690}
+{"stage": "daily_progress", "done": 200, "of": 690}
+{"stage": "daily_progress", "done": 250, "of": 690}
+{"stage": "daily_progress", "done": 300, "of": 690}
+{"stage": "daily_progress", "done": 350, "of": 690}
+{"stage": "daily_progress", "done": 400, "of": 690}
+{"stage": "daily_progress", "done": 450, "of": 690}
+{"stage": "daily_progress", "done": 500, "of": 690}
+{"stage": "daily_progress", "done": 550, "of": 690}
+{"stage": "daily_progress", "done": 600, "of": 690}
+{"stage": "daily_progress", "done": 650, "of": 690}
+{"stage": "DONE", "trading_days": 690, "range": ["20240102", "20261110"], "distinct_winners": 69, "events_in": 89, "events_out": 82, "current_pool_size": 7}
