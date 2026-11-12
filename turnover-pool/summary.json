@@ -1,69 +1,61 @@
 {
- "trading_days": 691,
+ "trading_days": 692,
  "range": [
   "20240102",
-  "20261111"
+  "20261112"
  ],
  "distinct_winners": 69,
  "events_in": 89,
- "events_out": 82,
- "current_pool_size": 7,
+ "events_out": 83,
+ "current_pool_size": 6,
  "current_pool": [
   {
    "ts_code": "300308.SZ",
    "name": "中际旭创",
-   "last_top_date": "20261111",
+   "last_top_date": "20261112",
    "days_since": 0,
    "days_left": 89,
-   "last_top_amount_yi": 312.29
+   "last_top_amount_yi": 336.22
   },
   {
    "ts_code": "300502.SZ",
    "name": "新易盛",
    "last_top_date": "20261030",
-   "days_since": 8,
-   "days_left": 81,
+   "days_since": 9,
+   "days_left": 80,
    "last_top_amount_yi": 216.08
   },
   {
    "ts_code": "688825.SH",
    "name": "长鑫科技",
    "last_top_date": "20261027",
-   "days_since": 11,
-   "days_left": 78,
+   "days_since": 12,
+   "days_left": 77,
    "last_top_amount_yi": 151.09
   },
   {
    "ts_code": "300750.SZ",
    "name": "宁德时代",
    "last_top_date": "20261021",
-   "days_since": 15,
-   "days_left": 74,
+   "days_since": 16,
+   "days_left": 73,
    "last_top_amount_yi": 324.39
   },
   {
    "ts_code": "603986.SH",
    "name": "兆易创新",
    "last_top_date": "20260818",
-   "days_since": 55,
-   "days_left": 34,
+   "days_since": 56,
+   "days_left": 33,
    "last_top_amount_yi": 267.95
   },
   {
    "ts_code": "002384.SZ",
    "name": "东山精密",
    "last_top_date": "20260715",
-   "days_since": 79,
-   "days_left": 10,
+   "days_since": 80,
+   "days_left": 9,
    "last_top_amount_yi": 372.58
-  },
-  {
-   "ts_code": "000725.SZ",
-   "name": "京东方A",
-   "last_top_date": "20260702",
-   "days_since": 88,
-   "days_left": 1,
-   "last_top_amount_yi": 493.42
   }
  ]
 }
