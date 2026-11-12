@@ -14,7 +14,7 @@ import urllib.request
 
 API = "https://api.tushare.pro"
 HERE = os.path.dirname(os.path.abspath(__file__))
-START, END = "20240101", "20261111"
+START, END = "20240101", "20261112"
 KICK = 89
 
 TOKEN = os.environ.get("TUSHARE_TOKEN", "").strip()
