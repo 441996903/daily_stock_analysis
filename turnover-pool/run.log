@@ -1,4 +1,4 @@
-{"stage": "cal", "trading_days": 692, "first": "20240102", "last": "20261112"}
+{"stage": "cal", "trading_days": 693, "first": "20240102", "last": "20261113"}
 {"stage": "stock_basic", "stocks": 5923}
-{"stage": "daily", "todo": 1, "done": 691}
-{"stage": "DONE", "trading_days": 692, "range": ["20240102", "20261112"], "distinct_winners": 69, "events_in": 89, "events_out": 83, "current_pool_size": 6}
+{"stage": "daily", "todo": 1, "done": 692}
+{"stage": "DONE", "trading_days": 693, "range": ["20240102", "20261113"], "distinct_winners": 69, "events_in": 89, "events_out": 83, "current_pool_size": 6}
